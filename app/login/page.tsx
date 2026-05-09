@@ -1,6 +1,7 @@
 "use client";
 
-import { loginUser, registerUser } from "../../lib/auth";
+import { loginUser } from "../../lib/auth";
+import { processNewUserRegistration } from "../../lib/registration";
 import { useState, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -66,7 +67,7 @@ function LoginContent() {
       return;
     }
 
-    const result = await registerUser(email, password);
+    const result = await processNewUserRegistration(email, password);
     if (result.success) {
       router.push('/panel');
     } else {
@@ -132,7 +133,7 @@ function LoginContent() {
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <span className="material-symbols-outlined text-outline">person</span>
                   </div>
-                  <input className={`w-full pl-[40px] pr-3 py-[14px] bg-surface rounded-lg border text-on-surface font-body-md text-body-md focus:ring-1 outline-none transition-colors placeholder:text-outline/70 ${emailError ? 'border-error focus:border-error focus:ring-error animate-shake text-error' : 'border-outline-variant focus:border-primary-container focus:ring-primary-container'}`} id="email" name="email" placeholder="ejemplo@finca.com" required={true} type="email" pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}" onInvalid={(e) => handleInvalidEmail(e, setEmailError)} onChange={() => setEmailError(false)} />
+                  <input className={`w-full pl-[40px] pr-3 py-[14px] bg-surface rounded-lg border text-on-surface font-body-md text-body-md focus:ring-1 outline-none transition-colors placeholder:text-outline/70 ${emailError ? 'border-error focus:border-error focus:ring-error animate-shake text-error' : 'border-outline-variant focus:border-primary-container focus:ring-primary-container'}`} id="email" name="email" placeholder="ejemplo@finca.com" required={true} type="email" onInvalid={(e) => handleInvalidEmail(e, setEmailError)} onChange={() => setEmailError(false)} />
                 </div>
               </div>
 
@@ -183,14 +184,14 @@ function LoginContent() {
               <div className="flex flex-col gap-1 md:col-span-2">
                 <label className="font-label-caps text-label-caps text-on-surface-variant uppercase ml-1" htmlFor="email">Correo electrónico</label>
                 <div className="relative">
-                  <input className={`w-full h-12 px-4 py-2 border rounded-lg focus:ring-2 outline-none transition-all placeholder:text-outline/50 bg-surface ${registerEmailError ? 'border-error focus:border-error focus:ring-error animate-shake text-error' : 'border-outline-variant focus:border-primary-container focus:ring-primary-container'}`} id="email" name="email" placeholder="juan.perez@empresa.com" required type="email" pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}" onInvalid={(e) => handleInvalidEmail(e, setRegisterEmailError)} onChange={() => setRegisterEmailError(false)} />
+                  <input className={`w-full h-12 px-4 py-2 border rounded-lg focus:ring-2 outline-none transition-all placeholder:text-outline/50 bg-surface ${registerEmailError ? 'border-error focus:border-error focus:ring-error animate-shake text-error' : 'border-outline-variant focus:border-primary-container focus:ring-primary-container'}`} id="email" name="email" placeholder="juan.perez@empresa.com" required type="email" onInvalid={(e) => handleInvalidEmail(e, setRegisterEmailError)} onChange={() => setRegisterEmailError(false)} />
                 </div>
               </div>
 
               <div className="flex flex-col gap-1 md:col-span-2">
                 <label className="font-label-caps text-label-caps text-on-surface-variant uppercase ml-1" htmlFor="confirm-email">Repetir correo electrónico</label>
                 <div className="relative">
-                  <input className={`w-full h-12 px-4 py-2 border rounded-lg focus:ring-2 outline-none transition-all placeholder:text-outline/50 bg-surface ${confirmEmailError ? 'border-error focus:border-error focus:ring-error animate-shake text-error' : 'border-outline-variant focus:border-primary-container focus:ring-primary-container'}`} id="confirm-email" name="confirm-email" placeholder="juan.perez@empresa.com" required type="email" pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}" onInvalid={(e) => handleInvalidEmail(e, setConfirmEmailError)} onChange={() => setConfirmEmailError(false)} />
+                  <input className={`w-full h-12 px-4 py-2 border rounded-lg focus:ring-2 outline-none transition-all placeholder:text-outline/50 bg-surface ${confirmEmailError ? 'border-error focus:border-error focus:ring-error animate-shake text-error' : 'border-outline-variant focus:border-primary-container focus:ring-primary-container'}`} id="confirm-email" name="confirm-email" placeholder="juan.perez@empresa.com" required type="email" onInvalid={(e) => handleInvalidEmail(e, setConfirmEmailError)} onChange={() => setConfirmEmailError(false)} />
                 </div>
               </div>
 

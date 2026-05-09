@@ -1,6 +1,6 @@
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
 
-import { auth } from "./firebase";
+import { authFirebase } from "./firebase";
 
 // -- Interfaz del Adapter --
 // Define el contrato que la app espera, independiente del proveedor de auth.
@@ -31,7 +31,7 @@ function translateFirebaseError(code: string): string {
 
 export async function loginUser(email: string, password: string): Promise<AuthResult> {
   try {
-    await signInWithEmailAndPassword(auth, email, password);
+    await signInWithEmailAndPassword(authFirebase, email, password);
     return { success: true };
   } catch (error: any) {
     console.error("Auth Adapter [login]:", error.code);
@@ -42,7 +42,7 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
 // WIP: Actualmente usa signIn. Cambiar a createUser cuando esté listo.
 export async function registerUser(email: string, password: string): Promise<AuthResult> {
   try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const userCredential = await createUserWithEmailAndPassword(authFirebase, email, password);
     console.log("Usuario registrado exitosamente:", userCredential.user.email);
     return { success: true };
   } catch (error: any) {
