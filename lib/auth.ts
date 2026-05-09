@@ -7,6 +7,10 @@ import { authFirebase } from "./firebase";
 export interface AuthResult {
   success: boolean;
   error?: string;
+  user?: {
+    uid: string;
+    email: string | null;
+  };
 }
 
 // -- Traductor de errores (Firebase -> Mensajes de usuario) --
@@ -31,8 +35,14 @@ function translateFirebaseError(code: string): string {
 
 export async function loginUser(email: string, password: string): Promise<AuthResult> {
   try {
-    await signInWithEmailAndPassword(authFirebase, email, password);
-    return { success: true };
+    const userCredential = await signInWithEmailAndPassword(authFirebase, email, password);
+    return { 
+      success: true, 
+      user: { 
+        uid: userCredential.user.uid, 
+        email: userCredential.user.email 
+      } 
+    };
   } catch (error: any) {
     console.error("Auth Adapter [login]:", error.code);
     return { success: false, error: translateFirebaseError(error.code) };
@@ -44,7 +54,13 @@ export async function registerUser(email: string, password: string): Promise<Aut
   try {
     const userCredential = await createUserWithEmailAndPassword(authFirebase, email, password);
     console.log("Usuario registrado exitosamente:", userCredential.user.email);
-    return { success: true };
+    return { 
+      success: true,
+      user: {
+        uid: userCredential.user.uid,
+        email: userCredential.user.email
+      }
+    };
   } catch (error: any) {
     console.error("Auth Adapter [register]:", error.code);
     return { success: false, error: translateFirebaseError(error.code) };
