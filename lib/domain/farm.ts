@@ -8,6 +8,7 @@ export interface Farm {
   id: string;
   name: string;
   centerCoordinates: Coordinate;
+  userIds?: string[]; // Marcado como opcional para no romper llamadas existentes de construcción si las hay
 }
 
 // 2. El Contrato (La interfaz que cualquier base de datos debe cumplir)

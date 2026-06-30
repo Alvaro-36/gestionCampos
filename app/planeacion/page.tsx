@@ -1,7 +1,12 @@
+"use client";
+
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRef, useState } from 'react';
+import Map, { MapRef } from '@/components/map/Map';
 
 export default function Planeacion() {
+  const mapRef = useRef<MapRef>(null);
   return (
     <div className="flex flex-row h-screen w-full overflow-hidden">
 <nav className="hidden md:flex flex-col h-full w-64 border-r border-outline-variant dark:border-outline bg-surface-container dark:bg-surface-container-low shrink-0 z-20 shadow-[0_0_15px_rgba(0,0,0,0.05)]">
@@ -160,13 +165,8 @@ export default function Planeacion() {
                             </p>
 </div>
 
-<div className="w-full h-full bg-[#e5e5f7] relative" style={{opacity: '0.8', backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px'}}>
-
-<svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none" viewBox="0 0 100 100">
-<polygon fill="rgba(45, 90, 39, 0.2)" points="12,12 38,15 42,42 15,38" stroke="#e9c349" strokeWidth="0.5"></polygon>
-<polygon fill="rgba(45, 90, 39, 0.2)" points="48,18 88,12 92,58 52,65" stroke="#e9c349" strokeWidth="0.5"></polygon>
-<polygon fill="transparent" points="22,62 48,58 45,92 18,88" stroke="#cbd5e1" strokeDasharray="1,1" strokeWidth="0.5"></polygon>
-</svg>
+<div className="w-full h-full relative flex-1">
+<Map ref={mapRef} />
 </div>
 </div>
 </div>

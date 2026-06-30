@@ -36,6 +36,8 @@ function translateFirebaseError(code: string): string {
 export async function loginUser(email: string, password: string): Promise<AuthResult> {
   try {
     const userCredential = await signInWithEmailAndPassword(authFirebase, email, password);
+    // Establecer la cookie de sesión para el middleware (expira en 30 días)
+    document.cookie = "user_session=true; path=/; max-age=2592000; SameSite=Strict";
     return { 
       success: true, 
       user: { 
@@ -54,6 +56,8 @@ export async function registerUser(email: string, password: string): Promise<Aut
   try {
     const userCredential = await createUserWithEmailAndPassword(authFirebase, email, password);
     console.log("Usuario registrado exitosamente:", userCredential.user.email);
+    // Establecer la cookie de sesión para el middleware (expira en 30 días)
+    document.cookie = "user_session=true; path=/; max-age=2592000; SameSite=Strict";
     return { 
       success: true,
       user: {

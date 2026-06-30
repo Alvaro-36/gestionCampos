@@ -1,38 +1,33 @@
 /**
- * Seed script: creates a test user, assigns a farm, and adds fields.
+ * Seed script: crea un usuario de prueba, le asigna una finca y agrega cuadros.
+ *
+ * Requiere que los emuladores de Firebase estén corriendo:
+ *   firebase emulators:start --only auth,firestore
  *
  * Usage:
- *   npm run seed
+ * 
+ * - Comando para iniciar emuladores:
+ *   npm run emulators
+ * 
+ * - Comando para crear usuario con finca y cuadros de prueba:
+ *   npm run seed:test
+ * 
+ * - Comando para cerrar emuladores:
+ *   Get-Process -Id (Get-NetTCPConnection -LocalPort 9099, 8080, 4000, 4400 -ErrorAction SilentlyContinue).OwningProcess | Stop-Process -Force
  */
 
-import 'dotenv/config';
-import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { auth, db } from '../firebase-test';
 
 import { FirestoreUserRepository } from '../../lib/infrastructure/firebase/FirestoreUserRepository';
 import { FirestoreFarmRepository } from '../../lib/infrastructure/firebase/FirestoreFarmRepository';
 import { FirestoreFieldRepository } from '../../lib/infrastructure/firebase/FirestoreFieldRepository';
 import { User } from '../../lib/domain/user';
 
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-};
-
-const appName = 'seed';
-const app = getApps().find(a => a.name === appName) ?? initializeApp(firebaseConfig, appName);
-const auth = getAuth(app);
-const db = getFirestore(app);
-
 async function seed() {
-  console.log('--- Iniciando seed ---');
+  console.log('--- Iniciando seed (emulador) ---');
 
-  // 1. Create user in Firebase Auth
+  // 1. Crear usuario en Firebase Auth (emulador)
   const email = `test.${Date.now()}@gestioncampos.dev`;
   const password = 'Test1234!';
 
@@ -41,7 +36,7 @@ async function seed() {
   const uid = credential.user.uid;
   console.log(`  Auth UID: ${uid}`);
 
-  // 2. Save user in Firestore
+  // 2. Guardar usuario en Firestore (emulador)
   const userRepo = new FirestoreUserRepository(db);
   const newUser: User = {
     uid,
@@ -53,7 +48,7 @@ async function seed() {
   await userRepo.create(newUser);
   console.log('  Usuario guardado en Firestore.');
 
-  // 3. Create a farm
+  // 3. Crear una finca
   const farmRepo = new FirestoreFarmRepository(db);
   const farmId = await farmRepo.create({
     name: 'Finca El Sauce',
@@ -61,14 +56,14 @@ async function seed() {
   });
   console.log(`\n  Finca creada. ID: ${farmId}`);
 
-  // 4. Assign farm access to user
+  // 4. Asignar acceso a la finca al usuario
   await userRepo.create({
     ...newUser,
     accesses: [{ farmId, role: 'owner' }],
   });
   console.log('  Acceso a finca asignado al usuario.');
 
-  // 5. Create fields in the farm
+  // 5. Crear cuadros en la finca
   const fieldRepo = new FirestoreFieldRepository(db);
 
   const field1Id = await fieldRepo.create(farmId, {

@@ -1,9 +1,10 @@
 import { Coordinate, IFarmRepository } from '../farm';
-import { Field } from '../field';
+import { Field, IFieldRepository } from '../field';
 
 export class FarmService {
   constructor(
-    private farmRepo: IFarmRepository
+    private farmRepo: IFarmRepository,
+    private fieldRepo: IFieldRepository
   ) {}
 
   /**
@@ -34,19 +35,34 @@ export class FarmService {
   }
 
   /**
-   * Updates the farm center using the center of a specific field.
-   * Useful to call when the first field is created.
+   * Updates the farm center by averaging the centers of all fields belonging to this farm.
    */
-  async syncFarmCenterWithField(farmId: string, field: Omit<Field, 'id'>): Promise<void> {
-    const fieldCenter = this.calculateFieldCenter(field);
-    
+  async syncFarmCenterWithField(farmId: string): Promise<void> {
     const farm = await this.farmRepo.getById(farmId);
-    if (farm) {
-      await this.farmRepo.update({
-        ...farm,
-        centerCoordinates: fieldCenter
-      });
-      console.log(`Finca ${farmId} centrada en el cuadro:`, fieldCenter);
+    if (!farm) return;
+
+    // Obtener todos los campos de la finca
+    const fields = await this.fieldRepo.listByFarmId(farmId);
+    if (fields.length === 0) return;
+
+    let sumLat = 0;
+    let sumLng = 0;
+
+    for (const field of fields) {
+      const center = this.calculateFieldCenter(field);
+      sumLat += center[0];
+      sumLng += center[1];
     }
+
+    const avgCenter: Coordinate = [
+      sumLat / fields.length,
+      sumLng / fields.length
+    ];
+
+    await this.farmRepo.update({
+      ...farm,
+      centerCoordinates: avgCenter
+    });
+    console.log(`Finca ${farmId} centrada en el promedio de sus campos:`, avgCenter);
   }
 }

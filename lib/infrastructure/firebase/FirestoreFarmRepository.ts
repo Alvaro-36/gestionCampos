@@ -1,5 +1,5 @@
 import { IFarmRepository, Farm } from '../../domain/farm';
-import { Firestore, collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc } from 'firebase/firestore';
+import { Firestore, collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc, query, where } from 'firebase/firestore';
 
 // Path: farms/{farmId}
 export class FirestoreFarmRepository implements IFarmRepository {
@@ -10,7 +10,11 @@ export class FirestoreFarmRepository implements IFarmRepository {
   }
 
   async create(farm: Omit<Farm, 'id'>): Promise<string> {
-    const docRef = await addDoc(this.farmsCollection, farm);
+    const docRef = await addDoc(this.farmsCollection, {
+      name: farm.name,
+      centerCoordinates: farm.centerCoordinates,
+      userIds: farm.userIds || []
+    });
     return docRef.id;
   }
 
@@ -37,22 +41,8 @@ export class FirestoreFarmRepository implements IFarmRepository {
   }
 
   async listByUser(userId: string): Promise<Farm[]> {
-    const userDocRef = doc(this.db, 'users', userId);
-    const userSnap = await getDoc(userDocRef);
-
-    if (!userSnap.exists()) return [];
-
-    const userData = userSnap.data();
-    const accesses: { farmId: string; role: string }[] = userData.accesses || [];
-    const farmIds = accesses.map(a => a.farmId);
-
-    if (farmIds.length === 0) return [];
-
-    const farms: Farm[] = [];
-    for (const farmId of farmIds) {
-      const farm = await this.getById(farmId);
-      if (farm) farms.push(farm);
-    }
-    return farms;
+    const q = query(this.farmsCollection, where('userIds', 'array-contains', userId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Farm));
   }
 }

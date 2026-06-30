@@ -46,6 +46,8 @@ function LoginContent() {
     setError(null);
 
     const formData = new FormData(e.currentTarget);
+    const firstName = formData.get("first-name") as string;
+    const lastName = formData.get("last-name") as string;
     const email = formData.get("email") as string;
     const confirmEmail = formData.get("confirm-email") as string;
     const password = formData.get("password") as string;
@@ -67,7 +69,7 @@ function LoginContent() {
       return;
     }
 
-    const result = await processNewUserRegistration(email, password);
+    const result = await processNewUserRegistration(email, password, firstName, lastName);
     if (result.success) {
       router.push('/panel');
     } else {

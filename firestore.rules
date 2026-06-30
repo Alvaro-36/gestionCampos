@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Reglas abiertas solo para el emulador de test
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -97,6 +97,5 @@
   body {
     background-color: var(--color-surface);
     color: var(--color-on-surface);
-    font-family: "Inter", sans-serif;
   }
 }
