@@ -98,4 +98,16 @@
     background-color: var(--color-surface);
     color: var(--color-on-surface);
   }
+
+  /* Disable spin-button controls globally */
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type=number] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
 }

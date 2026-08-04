@@ -18,7 +18,14 @@ function toFirestoreField(field: Omit<Field, 'id'>): Omit<FirestoreField, 'id'> 
 }
 
 function fromFirestoreField(id: string, data: Omit<FirestoreField, 'id'>): Field {
-  return { ...data, id, area: fromFirestoreCoords(data.area) };
+  let dateHourDown = data.dateHourDown || null;
+  if (dateHourDown && typeof (dateHourDown as any).toDate === 'function') {
+    dateHourDown = (dateHourDown as any).toDate();
+  } else if (typeof dateHourDown === 'string' || typeof dateHourDown === 'number') {
+    dateHourDown = new Date(dateHourDown);
+  }
+
+  return { ...data, id, area: fromFirestoreCoords(data.area), dateHourDown };
 }
 
 // Path: farms/{farmId}/fields/{fieldId}

@@ -152,9 +152,15 @@ export class GoogleMapsAdapter implements IMapProvider {
         return polygon;
     }
 
-    highlightPolygon(id: string | null): void {
+    highlightPolygon(id: string | string[] | null): void {
+        const idsToHighlight = Array.isArray(id) 
+            ? id 
+            : id !== null 
+                ? [id] 
+                : [];
+        
         this.polygons.forEach((polygon, polyId) => {
-            if (polyId === id) {
+            if (idsToHighlight.includes(polyId)) {
                 // Seleccionado: Más opaco y borde más grueso
                 polygon.setOptions({
                     fillOpacity: 0.7,

@@ -8,7 +8,8 @@ export function middleware(request: NextRequest) {
   // Rutas protegidas que requieren sesión
   const isProtectedRoute = 
     request.nextUrl.pathname.startsWith('/panel') || 
-    request.nextUrl.pathname.startsWith('/planeacion');
+    request.nextUrl.pathname.startsWith('/planeacion') ||
+    request.nextUrl.pathname.startsWith('/usuarios');
 
   // Rutas públicas de autenticación
   const isAuthRoute = request.nextUrl.pathname.startsWith('/login');
@@ -32,6 +33,7 @@ export const config = {
   matcher: [
     '/panel/:path*',
     '/planeacion/:path*',
+    '/usuarios/:path*',
     '/login'
   ],
 };

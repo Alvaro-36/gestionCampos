@@ -13,6 +13,7 @@ export class FirestoreFarmRepository implements IFarmRepository {
     const docRef = await addDoc(this.farmsCollection, {
       name: farm.name,
       centerCoordinates: farm.centerCoordinates,
+      ownerId: farm.ownerId || '',
       userIds: farm.userIds || []
     });
     return docRef.id;

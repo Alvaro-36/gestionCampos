@@ -1,4 +1,4 @@
-import { IMapProvider } from '../interfaces/IMapProvider';
+import { IMapProvider } from '../../domain/interfaces/IMapProvider';
 import { GoogleMapsAdapter } from '../adapters/GoogleMapsAdapter';
 
 export class MapFactory {

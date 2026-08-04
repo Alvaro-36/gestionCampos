@@ -4,6 +4,7 @@ export interface FarmDTO {
   id?: string;
   name: string;
   centerCoordinates: { lat: number; lng: number };
+  ownerId?: string;
   userIds: string[];
 }
 
@@ -16,6 +17,7 @@ export const FarmDTOConverter = {
         lat: farm.centerCoordinates[0],
         lng: farm.centerCoordinates[1],
       },
+      ownerId: farm.ownerId,
       userIds: farm.userIds || [],
     };
   },
@@ -25,6 +27,7 @@ export const FarmDTOConverter = {
       id: dto.id || '',
       name: dto.name,
       centerCoordinates: [dto.centerCoordinates.lat, dto.centerCoordinates.lng],
+      ownerId: dto.ownerId,
       userIds: dto.userIds || [],
     };
   }

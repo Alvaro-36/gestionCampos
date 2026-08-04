@@ -116,7 +116,7 @@ function LoginContent() {
 
             <h1 className="font-headline-md text-headline-md text-primary-container tracking-tight">AgroManage</h1>
             <p className="font-body-md text-body-md text-on-surface-variant">
-              {isRegisterMode ? 'Crea tu cuenta para gestionar tus cultivos con precisión.' : 'Inicie sesión para acceder a su panel de control'}
+              {isRegisterMode ? 'Crea tu cuenta para gestionar tus cultivos con precisión.' : 'Inicie sesión para acceder a su vista de mapa'}
             </p>
 
             {error && (

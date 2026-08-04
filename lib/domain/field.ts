@@ -9,6 +9,7 @@ export interface Field {
   area: PolygonVertices;
   description: string;
   tags: string[];
+  dateHourDown: Date | null;
 }
 
 // 2. El Contrato (La interfaz que cualquier base de datos debe cumplir)

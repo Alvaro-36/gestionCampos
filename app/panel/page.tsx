@@ -2,9 +2,9 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Map, { MapRef } from '@/components/map/Map';
+import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import FarmMapView, { FarmMapViewRef } from '@/components/map/FarmMapView';
 import { IMapProvider, PolygonVertices } from '@/lib/domain/interfaces/IMapProvider';
 import { Field } from '@/lib/domain/field';
 import { FieldDTOConverter } from '@/lib/domain/dtos/field.dto';
@@ -16,11 +16,14 @@ import { FirestoreFarmRepository } from '@/lib/infrastructure/firebase/Firestore
 import { FirestoreFieldRepository } from '@/lib/infrastructure/firebase/FirestoreFieldRepository';
 import { FirestoreUserRepository } from '@/lib/infrastructure/firebase/FirestoreUserRepository';
 import Spinner from '@/components/ui/Spinner';
+import Sidebar from '@/components/ui/Sidebar';
+import FarmDropdown from '@/components/ui/FarmDropdown';
 
-export default function Panel() {
-  const mapRef = useRef<MapRef>(null);
+function PanelContent() {
+  const farmMapRef = useRef<FarmMapViewRef>(null);
   const [area, setArea] = useState<number | null>(null);
-  const [selectedArea, setSelectedArea] = useState<string | null>(null);
+  const [selectedFieldIds, setSelectedFieldIds] = useState<string[]>([]);
+  const [isGroupSelectMode, setIsGroupSelectMode] = useState<boolean>(false);
   const [vertices, setVertices] = useState<PolygonVertices | null>(null);
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
   const [description, setDescription] = useState<string>("");
@@ -29,6 +32,8 @@ export default function Panel() {
   const [isSavingField, setIsSavingField] = useState<boolean>(false);
   const [isSavingFarm, setIsSavingFarm] = useState<boolean>(false);
   const [isLoadingFarms, setIsLoadingFarms] = useState<boolean>(true);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [customAreaHa, setCustomAreaHa] = useState<string>("");
   const [currentAreaId, setCurrentAreaId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: 'success' | 'error' | 'info' }>({
@@ -38,6 +43,8 @@ export default function Panel() {
   });
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initializedFromParams = useRef(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>("");
   const [userEmail, setUserEmail] = useState<string>("");
@@ -72,7 +79,7 @@ export default function Panel() {
     setMapProvider(provider);
     provider.onMapClick(() => {
       console.log("Área deseleccionada");
-      setSelectedArea(null);
+      setSelectedFieldIds([]);
       provider.highlightPolygon(null);
     });
   }, []);
@@ -127,11 +134,6 @@ export default function Panel() {
       const farmRepo = new FirestoreFarmRepository(db);
       const data = await farmRepo.listByUser(uid);
       setFarms(data); 
-      if (data.length > 0) {
-        setSelectedFarmId(data[0].id || null);
-      } else {
-        setSelectedFarmId(null);
-      }
     } catch (err) {
       console.error("Error al cargar fincas:", err);
     } finally {
@@ -139,59 +141,42 @@ export default function Panel() {
     }
   }, []);
 
+  const initializedFarm = useRef(false);
+
+  // Seleccionar la finca inicial (respetando los parámetros de la URL)
+  useEffect(() => {
+    if (farms.length === 0 || initializedFarm.current) return;
+    
+    const farmIdParam = searchParams.get('farmId');
+    if (farmIdParam && farms.some(f => f.id === farmIdParam)) {
+      setSelectedFarmId(farmIdParam);
+    } else {
+      setSelectedFarmId(farms[0].id || null);
+    }
+    initializedFarm.current = true;
+  }, [farms, searchParams]);
+
   useEffect(() => {
     if (userId) {
       loadFarms(userId);
     }
   }, [userId, loadFarms]);
 
-  // 3. Cargar lotes de la finca seleccionada
-  const loadFields = useCallback(async (farmId: string) => {
-    try {
-      const fieldRepo = new FirestoreFieldRepository(db);
-      const domainFields = await fieldRepo.listByFarmId(farmId);
-      setFields(domainFields);
-    } catch (err) {
-      console.error("Error al cargar lotes:", err);
-    }
-  }, []);
+  const [loadedFieldsFarmId, setLoadedFieldsFarmId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (selectedFarmId) {
-      loadFields(selectedFarmId);
-      const farm = farms.find(f => f.id === selectedFarmId);
-      if (farm && farm.centerCoordinates && mapProvider) {
-        mapProvider.setCenter(farm.centerCoordinates);
-      }
-    } else {
-      setFields([]);
-    }
-  }, [selectedFarmId, loadFields, farms, mapProvider]);
-
-  // 4. Dibujar polígonos reactivamente en el mapa cuando cambien los fields o el provider
-  useEffect(() => {
-    if (mapProvider && selectedFarmId) {
-      mapProvider.clearPolygons();
-      fields.forEach(async (field) => {
-        await mapProvider.drawPolygon(field.area, "#09ff00ff", {
-          id: field.id,
-          onClick: (id) => {
-            console.log(`Área seleccionada: ${id}`);
-            setSelectedArea(id);
-            mapProvider.highlightPolygon(id);
-          }
-        });
-      });
-    }
-  }, [fields, mapProvider, selectedFarmId]);
+  // 3. Callback cuando FarmMapView carga los lotes
+  const handleFieldsLoaded = useCallback((loadedFields: Field[]) => {
+    setFields(loadedFields);
+    setLoadedFieldsFarmId(selectedFarmId);
+  }, [selectedFarmId]);
 
   const handleSelectArea = async () => {
-    const provider = mapRef.current?.getProvider();
+    const provider = farmMapRef.current?.getProvider();
     if (provider) {
       try {
         setIsDrawing(true);
         // Deseleccionamos cualquier área actual al empezar a dibujar
-        setSelectedArea(null);
+        setSelectedFieldIds([]);
         provider.highlightPolygon(null);
         
         const vertices = await provider.selectMapArea();
@@ -205,7 +190,7 @@ export default function Panel() {
           id: areaId,
           onClick: (id) => {
             console.log(`Área seleccionada: ${id}`);
-            setSelectedArea(id);
+            setSelectedFieldIds([id]);
             provider.highlightPolygon(id);
           }
         });
@@ -221,14 +206,14 @@ export default function Panel() {
   };
 
   const handleUndo = () => {
-    const provider = mapRef.current?.getProvider();
+    const provider = farmMapRef.current?.getProvider();
     if (provider) {
       provider.undoLastVertex();
     }
   };
 
   const handleClear = () => {
-    const provider = mapRef.current?.getProvider();
+    const provider = farmMapRef.current?.getProvider();
     if (provider) {
       if (currentAreaId) {
         provider.removePolygon(currentAreaId);
@@ -246,7 +231,7 @@ export default function Panel() {
   };
 
   const handleCancelDrawing = () => {
-    const provider = mapRef.current?.getProvider();
+    const provider = farmMapRef.current?.getProvider();
     if (provider) {
       if (currentAreaId) {
         provider.removePolygon(currentAreaId);
@@ -279,7 +264,8 @@ export default function Panel() {
         totalArea: finalArea,
         area: vertices,
         description: description.trim(),
-        tags: ["lote-manual"]
+        tags: ["lote-manual"],
+        dateHourDown: null
       });
 
       // 3. Recalcular el centro de la finca como promedio de todos sus vértices
@@ -300,7 +286,7 @@ export default function Panel() {
       }
 
       // Recargar los lotes de la base de datos para redibujar en el mapa
-      await loadFields(selectedFarmId);
+      await farmMapRef.current?.reloadFields();
 
       // Mostrar notificación de éxito
       setToast({
@@ -317,6 +303,7 @@ export default function Panel() {
       setCustomAreaHa("");
       setCurrentAreaId(null);
       setIsDrawing(false);
+      setSelectedFieldIds([]);
 
     } catch (error: any) {
       console.error("Error al guardar el lote:", error);
@@ -327,6 +314,43 @@ export default function Panel() {
       });
     } finally {
       setIsSavingField(false);
+    }
+  };
+
+  const handleSoftDeleteField = () => {
+    if (selectedFieldIds.length !== 1 || !selectedFarmId || !selectedField) return;
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDeleteField = async () => {
+    if (selectedFieldIds.length !== 1 || !selectedFarmId || !selectedField) return;
+
+    try {
+      setIsDeleting(true);
+      const fieldRepo = new FirestoreFieldRepository(db);
+      const updatedField = { ...selectedField, dateHourDown: new Date() };
+      await fieldRepo.update(selectedFarmId, updatedField);
+
+      // Recargar los lotes para que desaparezca del mapa
+      await farmMapRef.current?.reloadFields();
+      
+      setSelectedFieldIds([]);
+      setIsDeleteModalOpen(false);
+      
+      setToast({
+        isVisible: true,
+        message: '¡El lote se ha eliminado correctamente!',
+        type: 'success'
+      });
+    } catch (error: any) {
+      console.error("Error al eliminar el lote:", error);
+      setToast({
+        isVisible: true,
+        message: error.message || 'Error al eliminar el lote.',
+        type: 'error'
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -347,13 +371,22 @@ export default function Panel() {
     try {
       setIsSavingFarm(true);
       const farmRepo = new FirestoreFarmRepository(db);
+      const userRepo = new FirestoreUserRepository(db);
       const newFarm = {
         name: newFarmName,
         centerCoordinates: [-33.0392, -68.8795] as [number, number],
+        ownerId: userId,
         userIds: [userId]
       };
       
       const farmId = await farmRepo.create(newFarm);
+
+      // Agregar acceso de owner al usuario
+      const userData = await userRepo.getById(userId);
+      if (userData) {
+        const updatedAccesses = [...(userData.accesses || []), { farmId, role: 'owner' as const }];
+        await userRepo.updateAccesses(userId, updatedAccesses);
+      }
 
       // Recargar fincas del usuario
       await loadFarms(userId);
@@ -392,77 +425,73 @@ export default function Panel() {
     }
   };
 
-  const selectedField = fields.find(f => f.id === selectedArea);
+  useEffect(() => {
+    console.log("Panel - Reset init - selectedFarmId changed to:", selectedFarmId);
+    initializedFromParams.current = false;
+  }, [selectedFarmId]);
+
+  useEffect(() => {
+    console.log("Panel - Init Effect - initialized:", initializedFromParams.current, "farmIdParam:", searchParams.get('farmId'), "selectedFarmId:", selectedFarmId, "fieldsCount:", fields.length, "loadedFieldsFarmId:", loadedFieldsFarmId);
+    if (initializedFromParams.current) return;
+    
+    const farmIdParam = searchParams.get('farmId');
+    const isParamFarmValid = farmIdParam ? farms.some(f => f.id === farmIdParam) : false;
+    
+    if (isParamFarmValid && farmIdParam !== selectedFarmId) {
+      console.log("Panel - Init Effect - farmId mismatch, returning...");
+      return; // Esperar a que cambie la finca
+    }
+    
+    if (selectedFarmId && loadedFieldsFarmId === selectedFarmId) {
+      const fieldIdsStr = searchParams.get('fieldIds');
+      console.log("Panel - Init Effect - fieldIdsStr in URL:", fieldIdsStr);
+      if (isParamFarmValid && fieldIdsStr) {
+        const ids = fieldIdsStr.split(',');
+        const validIds = ids.filter(id => fields.some(f => f.id === id));
+        console.log("Panel - Init Effect - validIds filtered:", validIds);
+        if (validIds.length > 0) {
+          setSelectedFieldIds(validIds);
+        }
+      }
+      initializedFromParams.current = true;
+    }
+  }, [farms, fields, searchParams, selectedFarmId, loadedFieldsFarmId]);
+
+  // Sincronizar el estado actual de selección con la URL de forma reactiva al hacer click o cambiar de finca
+  useEffect(() => {
+    if (!initializedFromParams.current) return;
+
+    const params = new URLSearchParams();
+    if (selectedFarmId) {
+      params.set('farmId', selectedFarmId);
+    }
+    if (selectedFieldIds.length > 0) {
+      params.set('fieldIds', selectedFieldIds.join(','));
+    }
+    
+    const newRelativePathQuery = window.location.pathname + '?' + params.toString();
+    window.history.replaceState(null, '', newRelativePathQuery);
+  }, [selectedFarmId, selectedFieldIds]);
+
+  const handleFieldClick = useCallback((id: string) => {
+    setSelectedFieldIds(prev => {
+      if (isGroupSelectMode) {
+        if (prev.includes(id)) {
+          return prev.filter(x => x !== id);
+        } else {
+          return [...prev, id];
+        }
+      } else {
+        return [id];
+      }
+    });
+  }, [isGroupSelectMode]);
+
+  const selectedField = selectedFieldIds.length === 1 ? fields.find(f => f.id === selectedFieldIds[0]) : null;
 
   return (
     <div className="flex flex-row h-screen w-full overflow-hidden">
-      <nav className="hidden md:flex flex-col h-full border-r border-outline-variant dark:border-outline bg-surface-container dark:bg-surface-container-low w-64 flex-shrink-0 z-20 relative">
-        <div className="p-6 border-b border-outline-variant flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center overflow-hidden flex-shrink-0">
-            <img
-              alt="Farm Logo"
-              className="w-full h-full object-cover"
-              data-alt="A stylized, modern geometric logo of a farm or leaf in deep forest green and gold tones, conveying precision agriculture and professional reliability. The design should be clean, corporate, and suitable for a high-end software application."
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDoKYLRRayAgBpltqTiXAEzY68RgrnVYVdXyYqwEZLk8OmKvfAqYT7bVOpMxXuZrGaktp5Wrf0dA68u4qlIj1iRqIWrjTLjKuNOjxCfCSmQ32O3pMe5tQ8GHMyXjAU_iA4fLnsy2L-VokV-C2P-94qJd6F8wks_N2F4E_UFhkdZoq2zwZfvF-y8ViBLMHaq7cx1RmIB4LMQtAUHQX7ZC-sunIZQlj216n4O2yQvO6CYVVXFWyoRuEvrRnKLTw5j-WBTLT3SJO6TWbI"
-            />
-          </div>
-          <div>
-            <h1 className="font-headline-md text-headline-md text-primary dark:text-primary-fixed-dim m-0 leading-tight">AgroManage</h1>
-            <p className="font-label-caps text-label-caps text-on-surface-variant opacity-80">Datos de Precisión</p>
-          </div>
-        </div>
-
-        <ul className="flex-1 overflow-y-auto py-3">
-          <li className="px-3 py-1">
-            <a className="flex items-center gap-3 px-3 py-3 rounded text-primary font-bold border-r-4 border-primary bg-primary-container/10 cursor-pointer select-none" href="#">
-              <span className="material-symbols-outlined text-[24px]" data-icon="map">map</span>
-              <span className="font-label-caps text-label-caps text-[14px]">Panel de Control</span>
-            </a>
-          </li>
-
-          <li className="px-3 py-1">
-            <a className="flex items-center gap-3 px-3 py-3 rounded text-on-surface-variant dark:text-on-surface-variant hover:text-primary hover:bg-surface-container-highest transition-all duration-200 cursor-pointer select-none" href="#">
-              <span className="material-symbols-outlined text-[24px]" data-icon="agriculture">agriculture</span>
-              <span className="font-label-caps text-label-caps text-[14px]">Planificación</span>
-            </a>
-          </li>
-
-          <li className="px-3 py-1">
-            <a className="flex items-center gap-3 px-3 py-3 rounded text-on-surface-variant dark:text-on-surface-variant hover:text-primary hover:bg-surface-container-highest transition-all duration-200 cursor-pointer select-none" href="#">
-              <span className="material-symbols-outlined text-[24px]" data-icon="compare_arrows">compare_arrows</span>
-              <span className="font-label-caps text-label-caps text-[14px]">Análisis</span>
-            </a>
-          </li>
-
-          <li className="px-3 py-1">
-            <a className="flex items-center gap-3 px-3 py-3 rounded text-on-surface-variant dark:text-on-surface-variant hover:text-primary hover:bg-surface-container-highest transition-all duration-200 cursor-pointer select-none" href="#">
-              <span className="material-symbols-outlined text-[24px]" data-icon="history_edu">history_edu</span>
-              <span className="font-label-caps text-label-caps text-[14px]">Registro de Actividad</span>
-            </a>
-          </li>
-
-          <li className="px-3 py-1">
-            <a className="flex items-center gap-3 px-3 py-3 rounded text-on-surface-variant dark:text-on-surface-variant hover:text-primary hover:bg-surface-container-highest transition-all duration-200 cursor-pointer select-none" href="#">
-              <span className="material-symbols-outlined text-[24px]" data-icon="bar_chart">bar_chart</span>
-              <span className="font-label-caps text-label-caps text-[14px]">Informes</span>
-            </a>
-          </li>
-
-          <li className="px-3 py-1">
-            <a className="flex items-center gap-3 px-3 py-3 rounded text-on-surface-variant dark:text-on-surface-variant hover:text-primary hover:bg-surface-container-highest transition-all duration-200 cursor-pointer select-none" href="#">
-              <span className="material-symbols-outlined text-[24px]" data-icon="settings_applications">settings_applications</span>
-              <span className="font-label-caps text-label-caps text-[14px]">Configuración de Temporada</span>
-            </a>
-          </li>
-        </ul>
-
-        <div className="p-3 border-t border-outline-variant">
-          <a className="flex items-center gap-3 px-3 py-3 rounded text-on-surface-variant dark:text-on-surface-variant hover:text-primary hover:bg-surface-container-highest transition-all duration-200 cursor-pointer select-none" href="#">
-            <span className="material-symbols-outlined text-[24px]" data-icon="contact_support">contact_support</span>
-            <span className="font-label-caps text-label-caps text-[14px]">Soporte</span>
-          </a>
-        </div>
-      </nav>
+      <Sidebar activePage="panel" selectedFarmId={selectedFarmId} selectedFieldIds={selectedFieldIds} />
 
       <div className="flex-1 flex flex-col h-full relative overflow-hidden">
         <header className="bg-surface dark:bg-surface-dim border-b border-outline-variant dark:border-outline flex justify-between items-center px-6 h-20 w-full flex-shrink-0 z-40 relative">
@@ -474,48 +503,11 @@ export default function Panel() {
 
             {farms.length > 0 ? (
               <div className="relative hidden sm:flex items-center gap-2" ref={dropdownRef}>
-                <div className="relative">
-                  <button 
-                    onClick={() => setIsFarmDropdownOpen(!isFarmDropdownOpen)}
-                    className="flex items-center bg-[#f3f4ed] border border-outline-variant rounded-lg px-4 py-2 text-body-sm font-title-sm text-on-surface hover:bg-surface-container transition-all cursor-pointer shadow-sm gap-2 select-none"
-                  >
-                    <span className="material-symbols-outlined text-[20px] text-primary">location_on</span>
-                    <span>
-                      {farms.find(f => f.id === selectedFarmId)?.name || "Seleccionar Finca"}
-                    </span>
-                    <span className={`material-symbols-outlined text-[20px] text-outline transition-transform duration-200 ${isFarmDropdownOpen ? 'rotate-180' : ''}`}>
-                      expand_more
-                    </span>
-                  </button>
-
-                  {/* Dropdown Options con Animación */}
-                  <div 
-                    className={`absolute top-full mt-2 left-0 w-64 bg-surface border border-outline-variant rounded-xl shadow-lg z-30 overflow-hidden transition-all duration-200 origin-top-left ${
-                      isFarmDropdownOpen 
-                        ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto' 
-                        : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
-                    }`}
-                  >
-                    <ul className="py-2 m-0 list-none max-h-60 overflow-y-auto">
-                      {farms.map((f) => (
-                        <li key={f.id}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedFarmId(f.id || null);
-                              setIsFarmDropdownOpen(false);
-                            }}
-                            className={`w-full text-left px-4 py-3 text-body-md font-body-md hover:bg-primary-container/20 hover:text-primary transition-colors cursor-pointer border-none bg-transparent ${
-                              f.id === selectedFarmId ? 'bg-primary-container/30 text-primary font-semibold' : 'text-on-surface'
-                            }`}
-                          >
-                            {f.name}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
+                  <FarmDropdown
+                    farms={farms}
+                    selectedFarmId={selectedFarmId}
+                    onChange={(id) => setSelectedFarmId(id)}
+                  />
                 
                 <button 
                   onClick={() => setIsCreatingFarm(true)}
@@ -540,28 +532,14 @@ export default function Panel() {
           </div>
 
           <div className="flex items-center gap-6">
-            <button className="text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high transition-colors p-3 rounded-full cursor-pointer active:opacity-80 relative">
-              <span className="material-symbols-outlined text-[28px]" data-icon="notifications">notifications</span>
-              <span className="absolute top-2 right-2 w-3 h-3 bg-error rounded-full border-2 border-surface"></span>
-            </button>
-            <button className="text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high transition-colors p-3 rounded-full cursor-pointer active:opacity-80 hidden sm:block">
-              <span className="material-symbols-outlined text-[28px]" data-icon="settings">settings</span>
-            </button>
-            <button className="text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high transition-colors p-3 rounded-full cursor-pointer active:opacity-80 hidden sm:block">
-              <span className="material-symbols-outlined text-[28px]" data-icon="help">help</span>
-            </button>
+
             <div className="relative" ref={userDropdownRef}>
               <button 
                 onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
-                className="w-12 h-12 rounded-full ml-3 overflow-hidden border-2 border-outline-variant cursor-pointer p-0 bg-transparent flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-11 h-11 rounded-full ml-3 bg-primary text-on-primary font-bold text-[18px] border-2 border-primary/30 cursor-pointer p-0 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-primary shadow-sm hover:opacity-90 transition-opacity"
                 title="Menú de usuario"
               >
-                <img
-                  alt="User profile avatar"
-                  className="w-full h-full object-cover"
-                  data-alt="A professional headshot of a person, suitable for a corporate or agricultural management software profile avatar. The lighting should be natural and professional."
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuC79QaJt9UYNqzVKsvgTtdDW9ljNmbdZO6eL4pquZ3S4PCtOL4WaYrk_x45hYtzCNUenNVSueyO33T9JBg-edKaK0NWcU3vSFJSKZTaQ7ghMqAW2mHUis2s7b1sGScTt9ENoaon2L9rtajDwtbknztKTZAJ4Ku2nM7NcYc6OeG8m5icWfc3WwKIrtG3LOcf8G-hhPuTmf3BYRZEF4RJG5LpZ4rc7Qkrua-jAnYvS7YmqXKNcVTvFy5tx6sJ9Gofj1KeedjI84405Sc"
-                />
+                <span>{(userName || userEmail || 'U').trim().charAt(0).toUpperCase()}</span>
               </button>
 
               {/* Menú desplegable de usuario */}
@@ -607,12 +585,23 @@ export default function Panel() {
             
 
             <div className="absolute inset-0 z-10">
-              <Map ref={mapRef} onReady={handleMapReady} />
+              <FarmMapView
+                ref={farmMapRef}
+                farmId={selectedFarmId}
+                centerCoordinates={farms.find(f => f.id === selectedFarmId)?.centerCoordinates}
+                selectedFieldIds={selectedFieldIds}
+                onFieldClick={handleFieldClick}
+                onMapClick={() => {
+                  setSelectedFieldIds([]);
+                }}
+                onFieldsLoaded={handleFieldsLoaded}
+                onReady={handleMapReady}
+              />
             </div>
           </div>
 
           <div className="relative z-20 p-6 flex flex-col gap-6 h-full w-full max-w-sm pointer-events-none">
-            {selectedArea === null && !isDrawing ? (
+            {selectedFieldIds.length === 0 && !isDrawing ? (
               selectedFarmId === null ? (
                 <div className="bg-surface/90 backdrop-blur-md border border-outline-variant shadow-md rounded-xl p-8 pointer-events-auto flex flex-col gap-4">
                   <span className="material-symbols-outlined text-[36px] text-primary self-center">gite</span>
@@ -628,14 +617,30 @@ export default function Panel() {
                   </button>
                 </div>
               ) : (
-                <button 
-                  onClick={handleSelectArea}
-                  className="pointer-events-auto bg-[#f3f4ed] text-on-surface border border-outline-variant px-5 py-3 rounded-lg shadow-md flex items-center gap-2 hover:bg-surface-container transition-colors self-start cursor-pointer font-title-sm text-title-sm"
-                  title="Añadir cuadro"
-                >
-                  <span className="material-symbols-outlined text-[20px]">add</span>
-                  <span>Añadir cuadro</span>
-                </button>
+                <div className="flex flex-col gap-3 pointer-events-auto">
+                  <button 
+                    onClick={handleSelectArea}
+                    className="w-full bg-[#f3f4ed] text-on-surface border border-outline-variant px-5 py-3 rounded-lg shadow-md flex items-center justify-center gap-2 hover:bg-surface-container transition-colors font-title-sm text-title-sm cursor-pointer border-none"
+                    title="Añadir cuadro"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">add</span>
+                    <span>Añadir cuadro</span>
+                  </button>
+                  <button 
+                    onClick={() => setIsGroupSelectMode(!isGroupSelectMode)}
+                    className={`w-full border px-5 py-3 rounded-lg shadow-md flex items-center justify-center gap-2 transition-colors font-title-sm text-title-sm cursor-pointer ${
+                      isGroupSelectMode 
+                        ? 'bg-primary text-on-primary border-primary' 
+                        : 'bg-[#f3f4ed] text-on-surface border-outline-variant hover:bg-surface-container'
+                    }`}
+                    title="Seleccionar grupo"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">
+                      {isGroupSelectMode ? 'library_add_check' : 'library_add'}
+                    </span>
+                    <span>{isGroupSelectMode ? 'Modo Selección Múltiple' : 'Seleccionar grupo'}</span>
+                  </button>
+                </div>
               )
             ) : (
               <div className="bg-surface/90 backdrop-blur-md border border-outline-variant shadow-md rounded-xl p-10 pointer-events-auto flex flex-col gap-6">
@@ -733,45 +738,91 @@ export default function Panel() {
                     </div>
                   </div>
                 ) : (
-                  // Lote Seleccionado
+                  // Lotes Seleccionados
                   <>
-                    <div className="flex flex-col gap-1">
+                    <div className="flex justify-between items-start mb-2">
                       <h2 className="font-headline-md text-headline-md text-on-surface m-0 leading-tight">
-                        {selectedField ? selectedField.name : "Sin Selección"}
+                        {selectedFieldIds.length === 1 ? (selectedField ? selectedField.name : "Cargando...") : "Grupo Seleccionado"}
                       </h2>
-                      {selectedField?.description && (
-                        <p className="font-body-md text-body-md text-on-surface-variant mt-1 italic">
-                          {selectedField.description}
-                        </p>
-                      )}
-                      <span className="self-start bg-secondary-container text-on-secondary-container font-label-caps text-label-caps px-3 py-1.5 rounded-md text-[14px] mt-2">
-                        Seleccionado
+                      <button 
+                        onClick={() => setSelectedFieldIds([])}
+                        className="text-on-surface-variant hover:bg-surface-container-high transition-colors p-1 rounded-full cursor-pointer flex items-center justify-center border-none bg-transparent"
+                        title="Limpiar selección"
+                      >
+                        <span className="material-symbols-outlined text-[24px]">close</span>
+                      </button>
+                    </div>
+
+                    {selectedFieldIds.length === 1 && selectedField?.description && (
+                      <p className="font-body-md text-body-md text-on-surface-variant mt-0 italic">
+                        {selectedField.description}
+                      </p>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-2 my-2">
+                      <span className="bg-secondary-container text-on-secondary-container font-label-caps text-label-caps px-3 py-1.5 rounded-md text-[14px]">
+                        {selectedFieldIds.length === 1 ? "Seleccionado" : `${selectedFieldIds.length} Lotes`}
                       </span>
+                      <button 
+                        onClick={() => setIsGroupSelectMode(!isGroupSelectMode)}
+                        className={`px-3 py-1.5 rounded-md text-[14px] font-label-caps text-label-caps border cursor-pointer transition-colors ${
+                          isGroupSelectMode 
+                            ? 'bg-primary text-on-primary border-primary' 
+                            : 'bg-surface-container text-on-surface border-outline-variant'
+                        }`}
+                      >
+                        {isGroupSelectMode ? 'Selección Múltiple: ON' : 'Selección Múltiple: OFF'}
+                      </button>
                     </div>
 
                     <div className="grid grid-cols-2 gap-6">
-                      <div className="bg-surface-container-lowest border border-outline-variant/50 p-6 rounded-lg">
-                        <p className="font-label-caps text-label-caps text-on-surface-variant mb-2">Tipo de Cultivo</p>
-                        <p className="font-title-sm text-title-sm font-semibold text-primary">Uva</p>
-                      </div>
-                      <div className="bg-surface-container-lowest border border-outline-variant/50 p-6 rounded-lg">
-                        <p className="font-label-caps text-label-caps text-on-surface-variant mb-2">Subtipo</p>
-                        <p className="font-title-sm text-title-sm font-semibold text-primary">Malbec</p>
-                      </div>
-                      <div className="bg-surface-container-lowest border border-outline-variant/50 p-6 rounded-lg">
-                        <p className="font-label-caps text-label-caps text-on-surface-variant mb-2">Tamaño</p>
-                        <p className="font-data-mono text-data-mono text-primary text-[16px]">
-                          {selectedField ? (selectedField.totalArea / 10000).toFixed(2) : "0"} ha
-                        </p>
-                      </div>
+                      {selectedFieldIds.length === 1 ? (
+                        <>
+                          <div className="bg-surface-container-lowest border border-outline-variant/50 p-6 rounded-lg">
+                            <p className="font-label-caps text-label-caps text-on-surface-variant mb-2">Tipo de Cultivo</p>
+                            <p className="font-title-sm text-title-sm font-semibold text-primary">Uva</p>
+                          </div>
+                          <div className="bg-surface-container-lowest border border-outline-variant/50 p-6 rounded-lg">
+                            <p className="font-label-caps text-label-caps text-on-surface-variant mb-2">Subtipo</p>
+                            <p className="font-title-sm text-title-sm font-semibold text-primary">Malbec</p>
+                          </div>
+                          <div className="bg-surface-container-lowest border border-outline-variant/50 p-6 rounded-lg col-span-2">
+                            <p className="font-label-caps text-label-caps text-on-surface-variant mb-2">Tamaño</p>
+                            <p className="font-data-mono text-data-mono text-primary text-[16px]">
+                              {selectedField ? (selectedField.totalArea / 10000).toFixed(2) : "0"} ha
+                            </p>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="bg-surface-container-lowest border border-outline-variant/50 p-6 rounded-lg col-span-2">
+                            <p className="font-label-caps text-label-caps text-on-surface-variant mb-2">Lotes Seleccionados</p>
+                            <div className="max-h-24 overflow-y-auto text-body-sm text-on-surface font-semibold flex flex-wrap gap-1">
+                              {fields.filter(f => selectedFieldIds.includes(f.id)).map(f => f.name).join(', ')}
+                            </div>
+                          </div>
+                          <div className="bg-surface-container-lowest border border-outline-variant/50 p-6 rounded-lg col-span-2">
+                            <p className="font-label-caps text-label-caps text-on-surface-variant mb-2">Tamaño Total</p>
+                            <p className="font-data-mono text-data-mono text-primary text-[16px]">
+                              {(fields.filter(f => selectedFieldIds.includes(f.id)).reduce((acc, f) => acc + f.totalArea, 0) / 10000).toFixed(2)} ha
+                            </p>
+                          </div>
+                        </>
+                      )}
                     </div>
 
-                    <div className="mt-6 flex flex-col gap-3 pointer-events-auto">
-                      <button className="w-full bg-primary text-on-primary font-title-sm text-title-sm py-6 rounded-lg hover:bg-surface-tint transition-colors shadow-sm">
-                        Ver Informe Completo
-                      </button>
-                      
-                    </div>
+                    {selectedFieldIds.length === 1 && (
+                      <div className="mt-6 flex flex-col gap-3 pointer-events-auto">
+                        <button 
+                          onClick={handleSoftDeleteField}
+                          className="w-full bg-error text-on-error font-title-sm text-title-sm py-4 rounded-lg hover:bg-error/90 transition-colors shadow-sm flex items-center justify-center gap-2 border-none cursor-pointer"
+                          title="Eliminar lote"
+                        >
+                          <span className="material-symbols-outlined text-[20px]">delete</span>
+                          Eliminar Lote
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -785,6 +836,42 @@ export default function Panel() {
         isVisible={toast.isVisible}
         onClose={() => setToast(prev => ({ ...prev, isVisible: false }))}
       />
+
+      {/* Modal Confirmar Eliminar Lote */}
+      {isDeleteModalOpen && selectedField && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 pointer-events-auto">
+          <div className="bg-surface border border-outline-variant rounded-2xl shadow-xl w-full max-w-md p-6 animate-in fade-in zoom-in duration-200">
+            <h2 className="text-[24px] font-bold text-on-surface mb-2">Eliminar Lote</h2>
+            <p className="text-body-md font-body-md text-on-surface-variant mb-6">
+              ¿Estás seguro de que deseas eliminar el lote <strong className="text-primary font-bold">{selectedField.name}</strong>? Esta acción lo ocultará del mapa, aunque mantendrá su historial.
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setIsDeleteModalOpen(false)}
+                disabled={isDeleting}
+                className="px-6 py-2.5 rounded-full text-label-lg font-label-lg font-semibold text-on-surface-variant hover:bg-surface-container transition-colors disabled:opacity-50 cursor-pointer border-none bg-transparent"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDeleteField}
+                disabled={isDeleting}
+                className="px-6 py-2.5 bg-error text-on-error rounded-full text-label-lg font-label-lg font-semibold hover:bg-error/95 transition-colors disabled:opacity-50 shadow-sm flex items-center gap-2 cursor-pointer border-none"
+              >
+                {isDeleting ? (
+                  <>
+                    <Spinner size={16} className="text-on-error" />
+                    <span>Eliminando...</span>
+                  </>
+                ) : (
+                  <span>Eliminar Lote</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isCreatingFarm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm pointer-events-auto">
@@ -850,5 +937,13 @@ export default function Panel() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function Panel() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-surface">Cargando...</div>}>
+      <PanelContent />
+    </Suspense>
   );
 }

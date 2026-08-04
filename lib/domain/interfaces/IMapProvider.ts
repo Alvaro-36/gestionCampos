@@ -30,10 +30,10 @@ export interface IMapProvider {
     drawPolygon(vertices: PolygonVertices, color: string, options?: { id?: string, onClick?: (id: string) => void }): Promise<any>;
 
     /**
-     * Highlights a specific polygon by its ID and resets others.
+     * Highlights a specific polygon or set of polygons by ID and resets others.
      * Pass null to reset all highlights.
      */
-    highlightPolygon(id: string | null): void;
+    highlightPolygon(id: string | string[] | null): void;
 
     /**
      * Calculates the area of the given polygon in square meters.

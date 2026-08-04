@@ -29,6 +29,7 @@ export class FieldDTOConverter {
       area: dto.area.map(({ lat, lng }) => [lat, lng]),
       description: dto.description || '',
       tags: dto.tags || [],
+      dateHourDown: null,
     };
   }
 }

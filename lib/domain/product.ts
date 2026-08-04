@@ -4,6 +4,8 @@ export interface Product {
   farmId: string;
   name: string;
   unit: string;
+  defaultPrice?: number;
+  defaultDose?: number;
 }
 
 // 2. El Contrato
